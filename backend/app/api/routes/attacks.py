@@ -32,14 +32,21 @@ class AttackResponse(BaseModel):
     count: int
     categories: Dict[str, int]
 
+class VulnerabilityDetail(BaseModel):
+    total: int
+    blocked: int
+    vulnerable: int
+    score: int
+
 class ResistanceTestResponse(BaseModel):
+    test_id: str
     original_prompt: str
     target_response: Optional[str]
     total_attacks: int
-    attack_categories: Dict[str, int]
-    attacks: List[str]
     resistance_score: int
+    vulnerability_breakdown: Dict[str, VulnerabilityDetail]
     recommendations: List[str]
+    attacks: List[str]
 
 class JobSubmitRequest(BaseModel):
     prompt: str
