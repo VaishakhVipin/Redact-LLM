@@ -18,12 +18,52 @@ export interface VulnerabilityDetail {
   score: number;
 }
 
+export interface AttackEvaluation {
+  jailbreak_blocked: "BLOCKED" | "NOT_BLOCKED";
+  hallucination_blocked: "BLOCKED" | "NOT_BLOCKED";
+  advanced_blocked: "BLOCKED" | "NOT_BLOCKED";
+  reasoning: string;
+}
+
+export interface VulnerabilityBreakdown {
+  total: number;
+  blocked: number;
+  vulnerable: number;
+  score: number;
+}
+
 export interface ResistanceTestResponse {
   test_id: string;
   original_prompt: string;
   resistance_score: number;
   total_attacks: number;
-  vulnerability_breakdown: { [key: string]: VulnerabilityDetail };
+  vulnerability_breakdown: {
+    jailbreak: VulnerabilityBreakdown;
+    hallucination: VulnerabilityBreakdown;
+    advanced: VulnerabilityBreakdown;
+  };
+  recommendations: string[];
+  attacks: string[];
+}
+
+export interface TestEvaluationResponse {
+  breakdown: AttackEvaluation;
+  debug: {
+    prompt: string;
+    raw_result: string;
+  };
+}
+
+export interface ResistanceTestResponse {
+  test_id: string;
+  original_prompt: string;
+  resistance_score: number;
+  total_attacks: number;
+  vulnerability_breakdown: {
+    jailbreak: AttackEvaluation;
+    hallucination: AttackEvaluation;
+    advanced: AttackEvaluation;
+  };
   recommendations: string[];
   attacks: string[];
 }
@@ -71,7 +111,7 @@ class ApiService {
   constructor() {
     this.axiosInstance = axios.create({
       baseURL: 'http://localhost:8000/api/v1',
-      timeout: 60000, // 60 seconds
+      timeout: 300000, // 5 minutes
     });
 
     this.axiosInstance.interceptors.response.use(
@@ -110,11 +150,49 @@ class ApiService {
     });
   }
 
+  async testEvaluation(prompt: string, attack: string, response: string): Promise<TestEvaluationResponse> {
+    return this.request<TestEvaluationResponse>('/attacks/test-evaluation', {
+      method: 'POST',
+      data: { prompt, attack, response },
+    });
+  }
+
   async testResistance(prompt: string): Promise<ResistanceTestResponse> {
-    return this.request<ResistanceTestResponse>('/attacks/test-resistance', {
+    const response = await this.request<any>('/attacks/test-resistance', {
       method: 'POST',
       data: { prompt },
     });
+
+    // Transform the response to match our frontend types
+    const vulnerabilityBreakdown: {
+      jailbreak: VulnerabilityBreakdown;
+      hallucination: VulnerabilityBreakdown;
+      advanced: VulnerabilityBreakdown;
+    } = {
+      jailbreak: {
+        total: response.vulnerability_breakdown.jailbreak.total,
+        blocked: response.vulnerability_breakdown.jailbreak.blocked,
+        vulnerable: response.vulnerability_breakdown.jailbreak.vulnerable,
+        score: response.vulnerability_breakdown.jailbreak.score,
+      },
+      hallucination: {
+        total: response.vulnerability_breakdown.hallucination.total,
+        blocked: response.vulnerability_breakdown.hallucination.blocked,
+        vulnerable: response.vulnerability_breakdown.hallucination.vulnerable,
+        score: response.vulnerability_breakdown.hallucination.score,
+      },
+      advanced: {
+        total: response.vulnerability_breakdown.advanced.total,
+        blocked: response.vulnerability_breakdown.advanced.blocked,
+        vulnerable: response.vulnerability_breakdown.advanced.vulnerable,
+        score: response.vulnerability_breakdown.advanced.score,
+      },
+    };
+
+    return {
+      ...response,
+      vulnerability_breakdown: vulnerabilityBreakdown,
+    };
   }
 
   async getStats(): Promise<StatsResponse> {

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { VulnerabilityBreakdown } from '@/components/VulnerabilityBreakdown';
+import { AttackTimeline } from "@/components/AttackTimeline";
 import { Lightbulb, AlertTriangle } from 'lucide-react';
 
 const AnalysisPage = () => {
@@ -57,7 +57,7 @@ const AnalysisPage = () => {
                 <p className="text-gray-700 italic text-md leading-relaxed">"{analysisResult.original_prompt}"</p>
               </CardContent>
             </Card>
-            <VulnerabilityBreakdown breakdown={analysisResult.vulnerability_breakdown} />
+            <AttackTimeline testId="" attacks={[]} vulnerabilityBreakdown={analysisResult.vulnerability_breakdown} />
           </div>
 
           <Card className="bg-cream-100 border-cream-200 shadow-md">

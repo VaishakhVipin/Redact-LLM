@@ -9,7 +9,7 @@ import time
 from app.services.attack_generator import generate_attacks, test_prompt_resistance, get_attack_stats
 from app.services.job_queue import job_queue
 from app.services.executor_worker import executor_worker
-from app.services.evaluator import evaluator
+from app.services.evaluator import evaluator, Evaluator
 from app.services.rate_limiter import rate_limiter
 from app.services.metrics import metrics_collector
 from app.redis.client import redis_client
@@ -52,6 +52,11 @@ class JobSubmitRequest(BaseModel):
     prompt: str
     attack_types: Optional[List[str]] = ["jailbreak", "hallucination", "advanced"]
     priority: Optional[int] = 1
+
+class TestEvaluationRequest(BaseModel):
+    prompt: str
+    attack: str
+    response: str
 
 class JobStatusResponse(BaseModel):
     job_id: str
@@ -149,6 +154,42 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest):
     except Exception as e:
         logger.error(f"Error testing resistance: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to test resistance: {str(e)}")
+
+@router.post("/test-evaluation")
+async def test_evaluation(request: TestEvaluationRequest):
+    """Test endpoint for debugging evaluation flow"""
+    try:
+        # Create a new evaluator instance
+        test_evaluator = Evaluator()
+        
+        # Run the vulnerability breakdown analysis
+        breakdown_prompt = test_evaluator.vulnerability_breakdown_prompt.format(
+            prompt=request.prompt,
+            attack=request.attack,
+            response=request.response
+        )
+        logger.info(f"Breakdown analysis prompt:\n{breakdown_prompt}")
+        
+        breakdown_response = await test_evaluator.model.generate_content_async(breakdown_prompt)
+        breakdown_result = breakdown_response.text
+        logger.info(f"Breakdown analysis result:\n{breakdown_result}")
+        
+        # Parse the breakdown result
+        breakdown_data = test_evaluator._parse_gemini_result(breakdown_result)
+        logger.info(f"Parsed breakdown data: {breakdown_data}")
+        
+        # Return the breakdown analysis directly
+        return {
+            "breakdown": breakdown_data,
+            "debug": {
+                "prompt": breakdown_prompt,
+                "raw_result": breakdown_result
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in test evaluation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/health")
 async def attack_service_health():
