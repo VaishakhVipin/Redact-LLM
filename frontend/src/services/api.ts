@@ -19,10 +19,15 @@ export interface VulnerabilityDetail {
 }
 
 export interface AttackEvaluation {
-  jailbreak_blocked: "BLOCKED" | "NOT_BLOCKED";
-  hallucination_blocked: "BLOCKED" | "NOT_BLOCKED";
-  advanced_blocked: "BLOCKED" | "NOT_BLOCKED";
+  jailbreak_blocked: boolean;
+  hallucination_blocked: boolean;
+  advanced_blocked: boolean;
   reasoning: string;
+  recommendations: {
+    category: string;
+    action: string;
+    severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
+  }[];
 }
 
 export interface VulnerabilityBreakdown {
@@ -49,17 +54,19 @@ export interface ResistanceTestResponse {
 export interface TestEvaluationResponse {
   breakdown: AttackEvaluation;
   debug: {
-    prompt: string;
-    raw_result: string;
+    evidence: {
+      type: string;
+      description: string;
+      confidence: number;
+    }[];
   };
-}
-
-export interface ResistanceTestResponse {
+  prompt: string;
+  raw_result: string;
   test_id: string;
   original_prompt: string;
   resistance_score: number;
   total_attacks: number;
-  vulnerability_breakdown: {
+  vulnerabilityBreakdown: {
     jailbreak: AttackEvaluation;
     hallucination: AttackEvaluation;
     advanced: AttackEvaluation;

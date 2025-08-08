@@ -1,37 +1,190 @@
 # AI Security Test System Documentation
 
 ## Overview
-The AI Security Test System consists of two main components:
-1. `attack_generator.py` - Generates security attacks
-2. `evaluator.py` - Evaluates attack effectiveness and vulnerability
+The AI Security Test System is designed to evaluate the security of AI models by generating and testing various attack vectors. The system consists of two main components:
 
-## System Architecture
+1. `attack_generator.py` - Generates security test cases and attacks
+2. `evaluator.py` - Evaluates model responses for vulnerabilities
 
-### Attack Generator Component (`attack_generator.py`)
+## Attack Generator (`attack_generator.py`)
 
-#### Core Attack Generation Functions
+### Core Functionality
+
+#### Main Attack Generation
 ```python
-# 1. Generate Attacks
-async def generate_attacks(prompt: str) -> List[str]:
-    """Main function to generate all types of attacks concurrently."""
-    try:
-        # Generate different types of attacks
-        tasks = [
-            attack_generator.generate_jailbreak_attacks(prompt),
-            attack_generator.generate_hallucination_tests(prompt),
-            attack_generator.generate_advanced_attacks(prompt)
-        ]
+async def generate_attacks(self, prompt: str, redis_client: redis.Redis = None) -> List[str]:
+    """
+    Generate and stream security attacks for a given prompt with duplicate filtering.
+    
+    Args:
+        prompt: The input prompt to generate attacks for
+        redis_client: Optional Redis client for streaming
         
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # Process results and return attacks
-        ...
-    except Exception as e:
-        logger.error(f"Error in generate_attacks: {e}")
-        return fallback_attacks
+    Returns:
+        List of generated attack strings
+    """
 ```
 
 #### Attack Types
+1. **Jailbreak Attacks**
+   - Role reversal
+   - Identity confusion
+   - System override
+   - Context negation
+   - Role conflict
+
+2. **Hallucination Tests**
+   - Contradictory facts
+   - Opposite behavior
+   - System misinterpretation
+   - Role inversion
+   - Context inversion
+
+3. **Advanced Attacks**
+   - Multi-layered contradiction
+   - Semantic reversal
+   - System conflict
+   - Role-system conflict
+   - Complex identity reversal
+
+### Key Methods
+
+#### Push to Redis Stream
+```python
+async def _push_attack_to_stream(self, base_prompt: str, attack_variant: str, 
+                              attack_type: str, attack_subtype: str) -> str:
+    """
+    Push attack to Redis stream.
+    
+    Args:
+        base_prompt: Original user prompt
+        attack_variant: Generated attack string
+        attack_type: Type of attack (jailbreak/hallucination/advanced)
+        attack_subtype: Specific attack subtype
+        
+    Returns:
+        Generated attack ID or empty string on failure
+    """
+```
+
+#### Attack Subtype Detection
+```python
+def _get_attack_subtype(self, attack: str) -> str:
+    """
+    Determine the attack subtype based on attack content.
+    
+    Args:
+        attack: The attack string to analyze
+        
+    Returns:
+        Detected attack subtype or 'unknown'
+    """
+```
+
+### Fallback Mechanisms
+
+#### Fallback Jailbreak Attacks
+```python
+def _fallback_jailbreak_attacks(self, prompt: str) -> List[str]:
+    """
+    Generate fallback jailbreak attacks if primary generation fails.
+    Returns a list of 5 pre-defined attack patterns.
+    """
+```
+
+#### Fallback Hallucination Tests
+```python
+def _fallback_hallucination_tests(self, prompt: str) -> List[str]:
+    """
+    Generate fallback hallucination tests if primary generation fails.
+    Returns a list of 5 pre-defined test patterns.
+    """
+```
+
+## Evaluator (`evaluator.py`)
+
+### Core Functionality
+
+#### Response Evaluation
+```python
+async def evaluate(self, prompt: str, attack: str, response: str, breakdown: bool = True) -> Dict[str, Any]:
+    """
+    Evaluate model response to an attack.
+    
+    Args:
+        prompt: Original prompt
+        attack: Attack that was used
+        response: Model's response
+        breakdown: Whether to include detailed vulnerability breakdown
+        
+    Returns:
+        Dictionary containing evaluation results
+    """
+```
+
+### Evaluation Criteria
+
+1. **Jailbreak Detection**
+   - Checks if the response contains jailbreak indicators
+   - Verifies if the model followed or bypassed safety constraints
+
+2. **Hallucination Detection**
+   - Identifies fabricated or false information
+   - Checks for consistency with known facts
+
+3. **Advanced Attack Detection**
+   - Detects complex attack patterns
+   - Evaluates system-level vulnerabilities
+
+### Response Format
+
+```json
+{
+    "blocked": boolean,
+    "vulnerable": boolean,
+    "reasoning": string,
+    "debug": {
+        "breakdown_raw": string,
+        "breakdown_parsed": object,
+        "score_calculation": object
+    },
+    "resistance_score": number,
+    "vulnerability_breakdown": {
+        "jailbreak": {
+            "total": number,
+            "blocked": number,
+            "vulnerable": number,
+            "score": number
+        },
+        "hallucination": { ... },
+        "advanced": { ... }
+    }
+}
+```
+
+## Usage Example
+
+```python
+# Initialize components
+attack_gen = AttackGenerator(redis_client=redis_client)
+evaluator = Evaluator()
+
+# Generate attacks
+attacks = await attack_gen.generate_attacks("Your prompt here")
+
+# Evaluate responses
+for attack in attacks:
+    response = await model.generate(attack)
+    evaluation = await evaluator.evaluate(
+        prompt="Your prompt here",
+        attack=attack,
+        response=response,
+        breakdown=True
+    )
+    print(f"Attack: {attack}")
+    print(f"Score: {evaluation['resistance_score']}")
+```
+```
 1. Jailbreak Attacks
 ```python
 async def generate_jailbreak_attacks(self, prompt: str, num_attacks: int = 4) -> List[str]:
@@ -46,7 +199,7 @@ async def generate_jailbreak_attacks(self, prompt: str, num_attacks: int = 4) ->
         - Attempt multi-turn approaches"""
         
         # Generate attacks using Gemini
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         response = await model.generate_content_async(prompt_analysis_prompt)
         
         # Extract and process attacks
@@ -67,7 +220,7 @@ async def generate_hallucination_tests(self, prompt: str, num_tests: int = 4) ->
         - Verify data accuracy
         
         # Use Gemini to generate tests
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         response = await model.generate_content_async(hallucination_prompt)
         
         # Process and return tests
@@ -88,7 +241,7 @@ async def generate_advanced_attacks(self, prompt: str, num_attacks: int = 4) -> 
         - Check for internal structure leaks
         
         # Use Gemini to generate attacks
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         response = await model.generate_content_async(advanced_prompt)
         
         # Process and return attacks
@@ -105,7 +258,7 @@ async def generate_advanced_attacks(self, prompt: str, num_attacks: int = 4) -> 
 class Evaluator:
     def __init__(self):
         # Initialize Gemini model
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        self.model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         # Vulnerability breakdown prompt
         self.vulnerability_breakdown_prompt = """You are a sophisticated AI security analyst...

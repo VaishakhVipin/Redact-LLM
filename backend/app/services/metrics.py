@@ -1,21 +1,39 @@
 import asyncio
 import json
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
-from app.redis.client import redis_client
+from app.redis.client import get_redis_client
 
 logger = logging.getLogger(__name__)
 
 class MetricsCollector:
     """comprehensive metrics collection for judges and monitoring"""
     
-    def __init__(self):
+    def __init__(self, redis_client=None):
         self.metrics_prefix = "metrics:"
         self.session_prefix = "session:"
+        self._redis_client = redis_client
+        
+    @property
+    async def redis(self):
+        """Lazy-load Redis client"""
+        if self._redis_client is None:
+            try:
+                self._redis_client = await get_redis_client()
+                if self._redis_client is None:
+                    logger.warning("Redis client is not available")
+            except Exception as e:
+                logger.error(f"Failed to get Redis client: {e}")
+        return self._redis_client
         
     async def record_attack_generation(self, prompt: str, attack_count: int, attack_types: List[str]):
         """record attack generation metrics"""
+        redis_client = await self.redis
+        if not redis_client:
+            logger.warning("Skipping attack generation metrics - Redis not available")
+            return
+            
         try:
             timestamp = datetime.utcnow().isoformat()
             
@@ -23,7 +41,7 @@ class MetricsCollector:
             await redis_client.incr(f"{self.metrics_prefix}total_prompts")
             
             # increment total attacks generated
-            await redis_client.incr(f"{self.metrics_prefix}total_attacks", attack_count)
+            await redis_client.incrby(f"{self.metrics_prefix}total_attacks", attack_count)
             
             # record attack types distribution
             for attack_type in attack_types:
@@ -45,12 +63,17 @@ class MetricsCollector:
             )
             
         except Exception as e:
-            logger.error(f"Error recording attack generation: {e}")
+            logger.error(f"Error recording attack generation: {e}", exc_info=True)
     
     async def record_verdict(self, attack_id: str, verdict_data: Dict[str, Any]):
         """record verdict metrics"""
         try:
             # increment total verdicts
+            redis_client = await self.redis
+            if not redis_client:
+                logger.warning("Skipping verdict metrics - Redis not available")
+                return
+            
             await redis_client.incr(f"{self.metrics_prefix}total_verdicts")
             
             # record risk levels
@@ -87,17 +110,27 @@ class MetricsCollector:
             )
             
         except Exception as e:
-            logger.error(f"Error recording verdict: {e}")
+            logger.error(f"Error recording verdict: {e}", exc_info=True)
     
     async def record_cache_hit(self, cache_type: str):
         """record cache hit metrics"""
+        redis_client = await self.redis
+        if not redis_client:
+            logger.warning("Skipping cache hit metrics - Redis not available")
+            return
+            
         try:
             await redis_client.incr(f"{self.metrics_prefix}cache_hits:{cache_type}")
         except Exception as e:
-            logger.error(f"Error recording cache hit: {e}")
+            logger.error(f"Error recording cache hit: {e}", exc_info=True)
     
     async def record_api_call(self, endpoint: str, status_code: int, response_time: float):
         """record API call metrics"""
+        redis_client = await self.redis
+        if not redis_client:
+            logger.warning("Skipping API call metrics - Redis not available")
+            return
+            
         try:
             # increment total API calls
             await redis_client.incr(f"{self.metrics_prefix}total_api_calls")
@@ -126,10 +159,15 @@ class MetricsCollector:
                 await redis_client.set(f"{self.metrics_prefix}response_time_count:{endpoint}", "1")
             
         except Exception as e:
-            logger.error(f"Error recording API call: {e}")
+            logger.error(f"Error recording API call: {e}", exc_info=True)
     
     async def get_comprehensive_stats(self) -> Dict[str, Any]:
         """get comprehensive statistics for judges"""
+        redis_client = await self.redis
+        if not redis_client:
+            logger.warning("Skipping comprehensive stats - Redis not available")
+            return {}
+            
         try:
             stats = {}
             
@@ -211,11 +249,16 @@ class MetricsCollector:
             return stats
             
         except Exception as e:
-            logger.error(f"Error getting comprehensive stats: {e}")
+            logger.error(f"Error getting comprehensive stats: {e}", exc_info=True)
             return {"error": str(e)}
     
     async def _get_heatmap_data(self) -> Dict[str, Any]:
         """get heatmap data for attack success rates"""
+        redis_client = await self.redis
+        if not redis_client:
+            logger.warning("Skipping heatmap data - Redis not available")
+            return {}
+            
         try:
             # get recent verdicts (last 24 hours)
             verdict_keys = await redis_client.keys(f"{self.metrics_prefix}verdict:*")
@@ -269,8 +312,26 @@ class MetricsCollector:
             return heatmap
             
         except Exception as e:
-            logger.error(f"Error getting heatmap data: {e}")
+            logger.error(f"Error getting heatmap data: {e}", exc_info=True)
             return {}
 
-# global instance
-metrics_collector = MetricsCollector() 
+# Global instance with lazy Redis initialization
+metrics_collector = MetricsCollector()
+
+async def get_metrics_collector(request=None) -> MetricsCollector:
+    """Get the metrics collector with Redis client from request state"""
+    global metrics_collector
+    
+    # If request is provided, try to get Redis client from app state
+    if request and hasattr(request.app.state, 'redis'):
+        metrics_collector._redis_client = request.app.state.redis
+    
+    # If Redis client is still not set, try to get a new one
+    if metrics_collector._redis_client is None:
+        try:
+            redis_client = await get_redis_client()
+            metrics_collector._redis_client = redis_client
+        except Exception as e:
+            logger.warning(f"Failed to get Redis client for metrics: {e}")
+    
+    return metrics_collector

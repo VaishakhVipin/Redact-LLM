@@ -3,7 +3,7 @@ import logging
 import hashlib
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
-from app.redis.client import redis_client
+from app.redis.client import RedisManager
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,7 @@ class RateLimiter:
     """comprehensive rate limiting for security and spam prevention"""
     
     def __init__(self):
+        self.redis_manager = RedisManager()
         self.rate_limits = {
             "attack_generation": {
                 "per_user": {"requests": 50, "window": 3600},  # 50 requests per hour per user
@@ -40,6 +41,11 @@ class RateLimiter:
             
             limits = self.rate_limits[service]
             results = {}
+            
+            # Get the Redis client
+            redis_client = await self.redis_manager.get_client()
+            if not redis_client:
+                raise RuntimeError("Failed to initialize Redis client")
             
             # check per-user limit
             if user_id and "per_user" in limits:
@@ -113,24 +119,31 @@ class RateLimiter:
             
             limits = self.rate_limits[service]
             
-            # increment per-user counter
-            if user_id and "per_user" in limits:
-                user_key = self._generate_key(f"{service}_user", user_id, limits["per_user"]["window"])
-                await redis_client.incr(user_key)
-                await redis_client.expire(user_key, limits["per_user"]["window"])
+            # Get the Redis client
+            redis_client = await self.redis_manager.get_client()
+            if not redis_client:
+                raise RuntimeError("Failed to initialize Redis client")
             
-            # increment per-IP counter
-            if ip_address and "per_ip" in limits:
-                ip_key = self._generate_key(f"{service}_ip", ip_address, limits["per_ip"]["window"])
-                await redis_client.incr(ip_key)
-                await redis_client.expire(ip_key, limits["per_ip"]["window"])
-            
-            # increment global counter
-            if "global" in limits:
-                global_key = self._generate_key(f"{service}_global", "global", limits["global"]["window"])
-                await redis_client.incr(global_key)
-                await redis_client.expire(global_key, limits["global"]["window"])
-            
+            async with redis_client.pipeline() as pipe:
+                # increment per-user counter
+                if user_id and "per_user" in limits:
+                    user_key = self._generate_key(f"{service}_user", user_id, limits["per_user"]["window"])
+                    await pipe.incr(user_key)
+                    await pipe.expire(user_key, limits["per_user"]["window"])
+                
+                # increment per-IP counter
+                if ip_address and "per_ip" in limits:
+                    ip_key = self._generate_key(f"{service}_ip", ip_address, limits["per_ip"]["window"])
+                    await pipe.incr(ip_key)
+                    await pipe.expire(ip_key, limits["per_ip"]["window"])
+                
+                # increment global counter
+                if "global" in limits:
+                    global_key = self._generate_key(f"{service}_global", "global", limits["global"]["window"])
+                    await pipe.incr(global_key)
+                    await pipe.expire(global_key, limits["global"]["window"])
+                
+                await pipe.execute()        
             return True
             
         except Exception as e:
@@ -140,6 +153,12 @@ class RateLimiter:
     async def get_rate_limit_stats(self) -> Dict[str, Any]:
         """get comprehensive rate limiting statistics"""
         try:
+            # Get Redis client
+            redis_client = await self.redis_manager.get_client()
+            if not redis_client:
+                logger.error("Failed to initialize Redis client in get_rate_limit_stats")
+                return {"error": "Failed to initialize Redis client"}
+                
             stats = {}
             
             for service, limits in self.rate_limits.items():
@@ -163,7 +182,7 @@ class RateLimiter:
                         "total_requests": total_requests,
                         "limit": config["requests"],
                         "window_seconds": config["window"],
-                        "utilization_percent": (total_requests / config["requests"]) * 100
+                        "utilization_percent": (total_requests / config["requests"]) * 100 if config["requests"] > 0 else 0
                     }
                 
                 stats[service] = service_stats
