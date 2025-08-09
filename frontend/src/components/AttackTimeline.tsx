@@ -74,44 +74,50 @@ export function AttackTimeline({ testId, attacks, vulnerabilityBreakdown }: Atta
         <CardTitle className="font-serif text-2xl text-gray-800">Vulnerability Breakdown</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-6">
-          {categories.map(({ name, key, stats }) => {
-            // Skip categories with no data
-            if (stats.total === 0) return null;
-            
+        <div className="space-y-8">
+          {categories.map(({ name, key, stats }, index) => {
             const percentage = calculatePercentage(stats.blocked, stats.total);
             const percentageText = `${percentage}%`;
+            const isLast = index === categories.length - 1;
+            const showPercentageLabels = isLast; // Only show on last item
             
             return (
               <div key={key} className="space-y-2">
                 <div className="flex justify-between items-center">
                   <h4 className="font-medium text-gray-800">{name}</h4>
-                  <span className={`font-bold ${
-                    percentage >= 80 ? 'text-green-600' : 
-                    percentage >= 50 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
-                    {stats.blocked}/{stats.total} blocked
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold ${
+                      percentage >= 80 ? 'text-green-600' : 
+                      percentage >= 50 ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      {stats.blocked}/{stats.total} blocked
+                    </span>
+                    <span className="text-gray-500 text-sm">
+                      ({percentageText})
+                    </span>
+                  </div>
                 </div>
                 
-                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
                   <div 
                     className={`h-full rounded-full transition-all duration-500 ${
                       percentage >= 80 ? 'bg-green-500' : 
                       percentage >= 50 ? 'bg-yellow-500' : 'bg-red-500'
                     }`}
-                    style={{ width: `${percentage}%` }}
+                    style={{ width: `${Math.max(5, percentage)}%` }}
                     aria-valuenow={percentage}
                     aria-valuemin={0}
                     aria-valuemax={100}
                   />
                 </div>
                 
-                <div className="flex justify-between text-sm text-gray-500">
-                  <span>0%</span>
-                  <span>{percentageText} blocked</span>
-                  <span>100%</span>
-                </div>
+                {showPercentageLabels && (
+                  <div className="flex justify-between text-sm text-gray-500 mt-1">
+                    <span>0%</span>
+                    <span>50%</span>
+                    <span>100%</span>
+                  </div>
+                )}
               </div>
             );
           })}

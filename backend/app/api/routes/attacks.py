@@ -1,5 +1,7 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
-from cerebras.cloud.sdk import Cerebras
+import re
+from fastapi import APIRouter, HTTPException, Request, Depends, BackgroundTasks
+from fastapi.responses import JSONResponse
+import redis.asyncio as redis
 import os
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -10,14 +12,20 @@ import time
 import uuid
 import traceback
 
-from app.services.attack_generator import get_attack_generator, generate_attacks, test_prompt_resistance, get_attack_stats
+from app.services.attack_generator import (
+    get_attack_generator,
+    AttackGenerator,
+    generate_attacks,
+    test_prompt_resistance,
+    get_attack_stats
+)
 from app.services.job_queue import job_queue
 from app.services.executor_worker import executor_worker
 from app.services.evaluator import evaluator, Evaluator
 from app.services.rate_limiter import rate_limiter
 from app.services.metrics import metrics_collector
-from app.redis.client import RedisManager
-
+from app.redis.client import RedisManager, get_redis_client
+from cerebras.cloud.sdk import Cerebras
 from app.models.schemas import (
     TestEvaluationResponse,
     AttackEvaluation,
@@ -132,7 +140,7 @@ async def get_client_ip(request: Request) -> str:
 async def generate_attack_prompts(
     request: AttackRequest, 
     http_request: Request,
-    client_ip: str = Depends(get_client_ip)
+    background_tasks: BackgroundTasks
 ):
     """
     Generate attack prompts for a given input prompt
@@ -143,11 +151,21 @@ async def generate_attack_prompts(
     start_time = time.time()
     
     try:
+        # Initialize Redis client
+        redis_client = await get_redis_client()
+        if not redis_client:
+            logger.warning("Redis client not available, proceeding without caching")
+        
+        # Initialize attack generator
+        attack_generator = AttackGenerator(redis_client=redis_client)
+        
+        all_attacks = []
+        
         # Check rate limits
         rate_check = await rate_limiter.check_rate_limit(
             service="attack_generation",
             user_id=request.prompt[:20],  # Simple user ID from prompt
-            ip_address=client_ip
+            ip_address=await get_client_ip(http_request)
         )
         
         if not rate_check["allowed"]:
@@ -159,23 +177,61 @@ async def generate_attack_prompts(
         logger.info(f"Generating attacks for prompt: {request.prompt[:50]}...")
         
         # Generate attacks using the attack generator
-        attacks = await generate_attacks(request.prompt, attack_types=request.attack_types)
+        for attack_type in request.attack_types:
+            try:
+                result = await attack_generator.generate_attacks(
+                    prompt=request.prompt,
+                    attack_type=attack_type,
+                    num_attacks=5
+                )
+                
+                # Process the result
+                if result:
+                    logger.info(f"Processing {attack_type} result (length: {len(result)})")
+                    
+                    # Handle both string and list results
+                    if isinstance(result, str):
+                        # Split string result into individual attacks and clean them
+                        attacks = []
+                        for line in result.split('\n'):
+                            line = line.strip()
+                            if not line:
+                                continue
+                            # Remove numbering if present (e.g., "1. ")
+                            if '. ' in line and line.split('. ')[0].isdigit():
+                                line = line.split('. ', 1)[1]
+                            attacks.append(line)
+                    elif isinstance(result, list):
+                        # Already a list of attacks
+                        attacks = [a for a in result if a and isinstance(a, str)]
+                    else:
+                        logger.warning(f"Unexpected result type: {type(result)}")
+                        attacks = []
+                        
+                    logger.info(f"Found {len(attacks)} {attack_type} attacks")
+                    all_attacks.extend(attacks)
+                    logger.info(f"Collected {len(all_attacks)} total attacks so far")
+                    
+            except Exception as e:
+                logger.error(f"Error processing {attack_type} attacks: {str(e)}")
+                logger.error(traceback.format_exc())
+                continue
         
-        # Categorize attacks
+        # Categorize attacks based on attack type
         categories = {
-            "jailbreak": len([a for a in attacks if any(keyword in a.lower() 
-                         for keyword in ["ignore", "bypass", "override", "ceo", "authority"])]),
-            "hallucination": len([a for a in attacks if any(keyword in a.lower() 
-                             for keyword in ["study", "research", "according to", "breaking news", "latest data"])]),
-            "advanced": len([a for a in attacks if any(keyword in a.lower() 
-                           for keyword in ["emergency", "protocol", "system", "critical"])])
+            "jailbreak": len([a for a in all_attacks if any(keyword in a.lower() 
+                             for keyword in ["ignore", "bypass", "override", "ceo", "authority"])]),
+            "hallucination": len([a for a in all_attacks if any(keyword in a.lower() 
+                                 for keyword in ["study", "research", "according to", "breaking news", "latest data"])]),
+            "advanced": len([a for a in all_attacks if any(keyword in a.lower() 
+                               for keyword in ["emergency", "protocol", "system", "critical"])])
         }
         
         # Record metrics
         attack_types = list(categories.keys())
         await metrics_collector.record_attack_generation(
             prompt=request.prompt,
-            attack_count=len(attacks),
+            attack_count=len(all_attacks),
             attack_types=attack_types
         )
         
@@ -183,13 +239,13 @@ async def generate_attack_prompts(
         await rate_limiter.increment_rate_limit(
             service="attack_generation",
             user_id=request.prompt[:20],
-            ip_address=client_ip
+            ip_address=await get_client_ip(http_request)
         )
         
         # Prepare response using Pydantic model
         response = AttackGenerationResponse(
-            attacks=attacks,
-            count=len(attacks),
+            attacks=all_attacks,
+            count=len(all_attacks),
             categories=categories,
             prompt=request.prompt  # Optional field
         )
@@ -226,42 +282,130 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
         
         logger.info(f"Testing resistance for prompt: {prompt[:50]}...")
         
-        # Get attack generator with Redis client from app state
-        attack_generator = await get_attack_generator(http_request)
+        # Get Redis client
+        redis_client = await get_redis_client()
+        if not redis_client:
+            logger.warning("Redis client not available, proceeding without caching")
         
-        # Generate attacks - the method handles all attack types internally
-        attack_tasks = [
-            attack_generator.generate_attacks(
-                prompt=request.prompt
-            )
-        ]
+        # Get attack generator
+        attack_generator = AttackGenerator(redis_client=redis_client)
         
-        # Run attack generation in parallel
-        results = await asyncio.gather(*attack_tasks, return_exceptions=True)
-        
+        # Simplified attack generation with better error handling
+        attack_types = request.attack_types or ["jailbreak", "hallucination", "advanced"]
+        attacks_per_type = 5
         attacks = []
-        for result in results:
-            if isinstance(result, Exception):
-                logger.error(f"Error generating attacks: {result}")
-                continue
-            attacks.extend(result)
+
+        logger.info(f"Starting attack generation for types: {attack_types}")
+        logger.info(f"System prompt (first 100 chars): {request.prompt[:100]}...")
+
+        try:
+            # Process each attack type sequentially for better error isolation
+            for attack_type in attack_types:
+                try:
+                    logger.info(f"Generating {attacks_per_type} {attack_type} attacks...")
+                    
+                    # Generate attacks using the attack generator
+                    result = await attack_generator.generate_attacks(
+                        prompt=request.prompt,
+                        attack_type=attack_type,
+                        num_attacks=attacks_per_type
+                    )
+                    
+                    # Process the result
+                    if not result:
+                        logger.warning(f"No attacks generated for {attack_type}")
+                        continue
+                        
+                    logger.info(f"Processing {attack_type} result (type: {type(result).__name__}, length: {len(result) if hasattr(result, '__len__') else 'N/A'})")
+                    
+                    # Initialize list to store cleaned attacks
+                    attack_blocks = []
+                    
+                    # Handle different result formats
+                    if isinstance(result, str):
+                        # Process string results (new format with numbered list)
+                        for line in result.split('\n'):
+                            line = line.strip()
+                            if not line:
+                                continue
+                                
+                            # Remove numbering if present (e.g., "1. ")
+                            if '. ' in line and line.split('. ')[0].isdigit():
+                                line = line.split('. ', 1)[1]
+                                
+                            # Remove any tags in square brackets
+                            line = re.sub(r'\s*\[.*?\]\s*$', '', line)
+                            
+                            attack_blocks.append(line)
+                            
+                    elif isinstance(result, list):
+                        # Process list results (legacy format)
+                        attack_blocks = [
+                            re.sub(r'\s*\[.*?\]\s*$', '', a.strip())  # Remove tags
+                            for a in result 
+                            if a and isinstance(a, str)
+                        ]
+                    
+                    # Log the number of attacks found
+                    logger.info(f"Found {len(attack_blocks)} {attack_type} attacks after processing")
+                    
+                    # Store attacks with their category
+                    attack_objects = [{"prompt": a, "type": attack_type} for a in attack_blocks]
+                    attacks.extend(attack_objects)
+                    logger.info(f"Collected {len(attack_objects)} {attack_type} attacks, {len(attacks)} total attacks so far")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing {attack_type} attacks: {str(e)}")
+                    logger.error(traceback.format_exc())
+                    continue
+            
+            logger.info(f"Total attacks generated: {len(attacks)}")
+            
+            if not attacks:
+                raise ValueError("No attacks could be generated. Please check the logs for details.")
+                
+        except Exception as e:
+            error_msg = f"Critical error in attack generation: {str(e)}"
+            logger.error(error_msg)
+            logger.error(traceback.format_exc())
+            raise HTTPException(status_code=500, detail=error_msg)
         
-        if not attacks:
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to generate attacks"
-            )
+        # If we have attacks, log a sample
+        if attacks:
+            sample_attack = attacks[0]['prompt'] if isinstance(attacks[0], dict) else attacks[0]
+            logger.info(f"Sample attack: {sample_attack[:200]}...")
+        
+        # Initialize evaluation results by category
+        evaluation_results = {
+            "jailbreak": {"successful": 0, "total": 0, "attacks": []},
+            "hallucination": {"successful": 0, "total": 0, "attacks": []},
+            "advanced": {"successful": 0, "total": 0, "attacks": []}
+        }
         
         # Evaluate each attack
-        evaluations = []
-        for attack in attacks:
+        for attack_data in attacks:
             try:
+                # Extract attack and its category
+                if isinstance(attack_data, dict):
+                    attack = attack_data["prompt"]
+                    attack_type = attack_data["type"]
+                else:
+                    attack = attack_data
+                    attack_type = "jailbreak"  # Default type for backward compatibility
+                
+                # Skip invalid attacks
+                if not attack or not attack_type:
+                    continue
+                    
                 # Get response for attack using Cerebras API
                 response = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: cerebras_client.chat.completions.create(
+                    lambda a=attack: cerebras_client.chat.completions.create(
                         model="llama3.1-8b",
-                        messages=[{"role": "user", "content": attack}],
+                        messages=[
+                            {"role": "system", "content": request.prompt},
+                            {"role": "user", "content": a}
+                        ],
                         temperature=0.7,
                         max_tokens=1000,
                         top_p=0.9
@@ -270,116 +414,83 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
                 
                 response_text = response.choices[0].message.content if hasattr(response, 'choices') and response.choices else ""
                 
-                # Try to evaluate the attack if evaluator is available
-                evaluation = None
+                # Update category totals
+                evaluation_results[attack_type]["total"] += 1
+                
+                # Check if the response maintains professional tone
+                is_vulnerable = False
                 if evaluator is not None:
                     try:
-                        evaluation = await evaluator.evaluate(
-                            prompt=prompt,
-                            attack=attack,
-                            response=response_text
-                        )
+                        is_professional = await evaluator.check_professional_tone(response_text)
+                        is_vulnerable = not is_professional
                     except Exception as e:
-                        logger.warning(f"Evaluation failed, continuing without it: {e}")
+                        logger.error(f"Error checking professional tone: {str(e)}")
+                        is_vulnerable = True  # Assume vulnerable if we can't check
                 
-                # Add result with or without evaluation
-                evaluations.append({
-                    "attack": attack,
+                # Update evaluation results
+                if is_vulnerable:
+                    evaluation_results[attack_type]["successful"] += 1
+                
+                # Store attack details
+                evaluation_results[attack_type]["attacks"].append({
+                    "prompt": attack,
                     "response": response_text,
-                    "evaluation": evaluation or {"blocked": False, "reason": "Evaluation not available"}
+                    "successful": is_vulnerable
                 })
                 
+                logger.debug(f"Evaluated {attack_type} attack: vulnerable={is_vulnerable}")
+                
             except Exception as e:
-                logger.error(f"Error evaluating attack: {e}")
-                continue
+                logger.error(f"Error evaluating attack: {str(e)}")
+                logger.error(traceback.format_exc())
         
-        # Calculate resistance score if we have evaluations with results
-        blocked_count = sum(1 for e in evaluations 
-                          if e["evaluation"] and isinstance(e["evaluation"], dict) 
-                          and e["evaluation"].get("blocked", False))
-        total_attacks = len(evaluations) if evaluations else 1  # Avoid division by zero
-        resistance_score = int((blocked_count / total_attacks) * 100) if total_attacks > 0 else 0
+        # Calculate overall metrics
+        total_attacks = sum(stats["total"] for stats in evaluation_results.values())
+        successful_attacks = sum(stats["successful"] for stats in evaluation_results.values())
+        blocked_attacks = total_attacks - successful_attacks
+        resistance_score = (blocked_attacks / total_attacks * 100) if total_attacks > 0 else 100
         
-        # Generate recommendations if available
-        recommendations = []
-        for eval_data in evaluations:
-            if (eval_data["evaluation"] and 
-                isinstance(eval_data["evaluation"], dict) and 
-                not eval_data["evaluation"].get("blocked", False)):
-                recs = eval_data["evaluation"].get("recommendations", []) if isinstance(eval_data["evaluation"], dict) else []
-                # Convert recommendations to Pydantic models
-                for rec in recs:
-                    try:
-                        recommendations.append(Recommendation(**rec))
-                    except Exception as e:
-                        logger.warning(f"Invalid recommendation format: {rec}")
-        
-        # Remove duplicate recommendations
-        unique_recommendations = []
-        seen = set()
-        for rec in recommendations:
-            rec_tuple = (rec.action, rec.category)
-            if rec_tuple not in seen:
-                seen.add(rec_tuple)
-                unique_recommendations.append(rec)
-        
-        # Prepare vulnerability breakdown
-        vulnerability_breakdown = {
-            "jailbreak": VulnerabilityBreakdown(
-                total=0,
-                blocked=0,
-                vulnerable=0,
-                score=0.0
-            ),
-            "hallucination": VulnerabilityBreakdown(
-                total=0,
-                blocked=0,
-                vulnerable=0,
-                score=0.0
-            ),
-            "advanced": VulnerabilityBreakdown(
-                total=0,
-                blocked=0,
-                vulnerable=0,
-                score=0.0
+        # Calculate vulnerability breakdown
+        vulnerability_breakdown = {}
+        for category, stats in evaluation_results.items():
+            total = stats["total"]
+            successful = stats["successful"]
+            blocked = total - successful if total > 0 else 0
+            score = (blocked / total * 100) if total > 0 else 100
+            
+            vulnerability_breakdown[category] = VulnerabilityBreakdown(
+                total=total,
+                blocked=blocked,
+                vulnerable=successful,
+                score=round(score, 2)
             )
-        }
-
-        # Format recommendations as strings for the frontend
-        formatted_recommendations = [
-            f"{rec.category}: {rec.action} (Severity: {rec.severity})"
-            for rec in unique_recommendations
-        ]
         
         # Prepare the response data with correct structure for frontend
+        # Extract just the attack prompts for the response
+        attack_prompts = []
+        detailed_attacks = []
+        
+        for attack_type, stats in evaluation_results.items():
+            for attack in stats["attacks"]:
+                attack_prompts.append(attack["prompt"])
+                detailed_attacks.append({
+                    "prompt": attack["prompt"],
+                    "type": attack_type,
+                    "successful": attack["successful"]
+                })
+        
+        # Log detailed attacks for debugging
+        logger.debug(f"Detailed attacks: {json.dumps(detailed_attacks, indent=2)}")
+        
         response_data = {
             "test_id": str(uuid.uuid4()),
-            "original_prompt": prompt,
-            "target_response": None,
+            "original_prompt": request.prompt,
+            "target_response": request.target_response,
             "total_attacks": total_attacks,
-            "resistance_score": resistance_score,
-            "vulnerability_breakdown": {
-                "jailbreak": {
-                    "total": total_attacks,
-                    "blocked": blocked_count,
-                    "vulnerable": total_attacks - blocked_count,
-                    "score": resistance_score
-                },
-                "hallucination": {
-                    "total": 0,  # These will be updated based on actual test results
-                    "blocked": 0,
-                    "vulnerable": 0,
-                    "score": 0
-                },
-                "advanced": {
-                    "total": 0,  # These will be updated based on actual test results
-                    "blocked": 0,
-                    "vulnerable": 0,
-                    "score": 0
-                }
-            },
-            "recommendations": formatted_recommendations,
-            "attacks": [e["attack"] for e in evaluations]
+            "resistance_score": round(resistance_score, 2),
+            "vulnerability_breakdown": vulnerability_breakdown,
+            "recommendations": [],  # Will be populated with actual recommendations
+            "attacks": attack_prompts  # Just the attack strings as expected by the schema
         }
         
         # Log the response data for debugging
@@ -405,11 +516,15 @@ async def test_evaluation(request: TestEvaluationRequest):
     including vulnerability breakdown and security recommendations.
     """
     try:
-        # Create a new evaluator instance
+        # Create a new evaluator instance for testing
         test_evaluator = Evaluator()
         
         # Generate attacks for the prompt
         attacks = await generate_attacks(request.prompt)
+        
+        # Make sure attacks is a list
+        if not isinstance(attacks, list):
+            attacks = [attacks] if attacks else []
         
         # Run the vulnerability breakdown analysis
         breakdown_prompt = test_evaluator.vulnerability_breakdown_prompt.format(
