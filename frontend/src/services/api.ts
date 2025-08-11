@@ -1,4 +1,22 @@
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+// Determine the correct API base URL based on environment
+const getApiBaseUrl = () => {
+  // Check if we're in production
+  if (import.meta.env.PROD) {
+    // Use your deployed backend URL - you'll need to update this with your actual backend deployment URL
+    return 'https://your-backend-deployment-url.com/api/v1';
+  }
+  
+  // For development, check if a custom API URL is provided
+  const customApiUrl = import.meta.env.VITE_API_URL;
+  if (customApiUrl) {
+    return `${customApiUrl}/api/v1`;
+  }
+  
+  // Default to localhost for development
+  return 'http://localhost:8000/api/v1';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export interface AttackGenerationRequest {
   prompt: string;
@@ -119,7 +137,7 @@ class ApiService {
 
   constructor() {
     this.axiosInstance = axios.create({
-      baseURL: 'http://localhost:8000/api/v1',
+      baseURL: API_BASE_URL,
       timeout: 300000, // 5 minutes
     });
 
