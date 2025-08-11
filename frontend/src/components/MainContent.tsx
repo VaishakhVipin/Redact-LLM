@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { VulnerabilityBreakdown } from '@/components/VulnerabilityBreakdown';
 import { PromptInput } from "./PromptInput";
 
 
@@ -58,14 +57,14 @@ export const MainContent = () => {
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-10">
-      <div className="text-center w-full max-w-4xl space-y-8">
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="text-center space-y-8">
         <div className="space-y-2">
           <h1 className="text-5xl font-serif font-bold text-stone-800">
             Prompt Security Analysis
           </h1>
           <p className="mt-4 text-xl text-stone-600">
-            Test your prompts against sophisticated AI attacks and get actionable security recommendations
+            Test your prompts against sophisticated AI attacks and get actionable security recommendations. Max 1000 chars.
           </p>
         </div>
         <div className="mt-8">

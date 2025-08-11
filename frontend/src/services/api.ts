@@ -78,6 +78,8 @@ export interface TestEvaluationResponse {
 export interface StatsResponse {
   total_prompts: number;
   average_score: number;
+  total_attacks_blocked: number;
+  average_response_time: number;
 }
 
 export interface PipelineStatsResponse {

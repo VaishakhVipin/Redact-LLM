@@ -45,16 +45,20 @@ async def lifespan(app: FastAPI):
                 await redis_client.ping()
                 app.state.redis = redis_client
                 logger.info("✅ Successfully connected to Redis")
+                
+                # Initialize executor worker with Redis client
+                from app.services.executor_worker import init_executor_worker
+                app.state.executor_worker = await init_executor_worker()
+                logger.info("✅ Initialized Executor Worker")
+                
             except Exception as e:
                 logger.error(f"❌ Redis connection test failed: {e}")
                 app.state.redis = None
                 redis_client = None
-        else:
-            logger.warning("⚠️  Redis client initialization returned None")
-            app.state.redis = None
     except Exception as e:
         logger.error(f"❌ Failed to initialize Redis client: {e}")
         app.state.redis = None
+        redis_client = None
     
     # Store the Redis client in app state
     app.state.redis = redis_client

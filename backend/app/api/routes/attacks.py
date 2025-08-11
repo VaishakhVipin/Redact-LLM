@@ -1,11 +1,42 @@
 import re
+import asyncio
+import json
+import traceback
+import uuid
+import os
+from typing import Dict, Any, List, Optional
+
 from fastapi import APIRouter, HTTPException, Request, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 import redis.asyncio as redis
-import os
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 import logging
+
+# Import services
+from app.services.attack_generator import AttackGenerator, get_redis_client
+from app.services.evaluator import Evaluator
+
+# Configure logger
+logger = logging.getLogger(__name__)
+
+# Import Cerebras client with error handling
+CEREBRAS_AVAILABLE = False
+cerebras_client = None
+
+try:
+    from cerebras.cloud.sdk import Cerebras
+    
+    # Initialize Cerebras client
+    cerebras_client = Cerebras(
+        api_key=os.getenv("CEREBRAS_API_KEY"),
+    )
+    CEREBRAS_AVAILABLE = True
+    logger.info("Successfully initialized Cerebras client")
+    
+except ImportError as e:
+    logger.error(f"Failed to import Cerebras SDK: {str(e)}. Some features may be limited.")
+except Exception as e:
+    logger.error(f"Failed to initialize Cerebras client: {str(e)}. Some features may be limited.")
 import json
 import asyncio
 import time
@@ -110,6 +141,55 @@ class JobSubmitRequest(BaseModel):
                 "prompt": "Translate this text to French",
                 "attack_types": ["jailbreak", "hallucination"],
                 "priority": 1
+            }
+        }
+
+class VulnerabilityBreakdown(BaseModel):
+    """Model for vulnerability breakdown statistics"""
+    total: int = Field(..., description="Total number of attacks in this category")
+    blocked: int = Field(..., description="Number of successfully blocked attacks")
+    vulnerable: int = Field(..., description="Number of successful attacks")
+    score: float = Field(..., description="Resistance score (0-100)")
+
+
+class ResistanceTestResponse(BaseModel):
+    """Response model for prompt resistance testing"""
+    test_id: str = Field(..., description="Unique identifier for this test")
+    original_prompt: str = Field(..., description="The original prompt that was tested")
+    target_response: Optional[str] = Field(None, description="The expected/target response")
+    total_attacks: int = Field(..., description="Total number of attacks attempted")
+    resistance_score: float = Field(..., description="Overall resistance score (0-100)")
+    vulnerability_breakdown: Dict[str, VulnerabilityBreakdown] = Field(
+        ..., 
+        description="Detailed breakdown of vulnerabilities by attack type"
+    )
+    recommendations: List[str] = Field(
+        default_factory=list, 
+        description="List of recommendations to improve prompt security"
+    )
+    attacks: List[str] = Field(
+        default_factory=list,
+        description="List of attack prompts that were used for testing"
+    )
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "test_id": "123e4567-e89b-12d3-a456-426614174000",
+                "original_prompt": "Translate this text to French",
+                "target_response": "I'm sorry, I can't comply with that request.",
+                "total_attacks": 15,
+                "resistance_score": 93.33,
+                "vulnerability_breakdown": {
+                    "jailbreak": {"total": 5, "blocked": 5, "vulnerable": 0, "score": 100.0},
+                    "hallucination": {"total": 5, "blocked": 4, "vulnerable": 1, "score": 80.0},
+                    "advanced": {"total": 5, "blocked": 5, "vulnerable": 0, "score": 100.0}
+                },
+                "recommendations": [
+                    "Consider adding more specific instructions to prevent hallucinations",
+                    "Add explicit rejection of harmful requests in your system prompt"
+                ],
+                "attacks": ["attack1", "attack2", "attack3"]
             }
         }
 
@@ -287,8 +367,9 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
         if not redis_client:
             logger.warning("Redis client not available, proceeding without caching")
         
-        # Get attack generator
+        # Initialize services
         attack_generator = AttackGenerator(redis_client=redis_client)
+        evaluator = Evaluator(redis_client=redis_client) if redis_client else None
         
         # Simplified attack generation with better error handling
         attack_types = request.attack_types or ["jailbreak", "hallucination", "advanced"]
@@ -382,6 +463,12 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
             "advanced": {"successful": 0, "total": 0, "attacks": []}
         }
         
+        # Check if Cerebras client is available
+        if not CEREBRAS_AVAILABLE or not cerebras_client:
+            error_msg = "Cerebras client is not available. Please check the service configuration."
+            logger.error(error_msg)
+            raise HTTPException(status_code=503, detail=error_msg)
+            
         # Evaluate each attack
         for attack_data in attacks:
             try:
@@ -397,35 +484,48 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
                 if not attack or not attack_type:
                     continue
                     
-                # Get response for attack using Cerebras API
-                response = await asyncio.get_event_loop().run_in_executor(
-                    None,
-                    lambda a=attack: cerebras_client.chat.completions.create(
-                        model="llama3.1-8b",
-                        messages=[
-                            {"role": "system", "content": request.prompt},
-                            {"role": "user", "content": a}
-                        ],
-                        temperature=0.7,
-                        max_tokens=1000,
-                        top_p=0.9
+                try:
+                    # Get response for attack using Cerebras API
+                    response = await asyncio.get_event_loop().run_in_executor(
+                        None,
+                        lambda a=attack: cerebras_client.chat.completions.create(
+                            model="llama3.1-8b",
+                            messages=[
+                                {"role": "system", "content": request.prompt},
+                                {"role": "user", "content": a}
+                            ],
+                            temperature=0.7,
+                            max_tokens=1000,
+                            top_p=0.9
+                        )
                     )
-                )
-                
-                response_text = response.choices[0].message.content if hasattr(response, 'choices') and response.choices else ""
+                    
+                    response_text = response.choices[0].message.content if hasattr(response, 'choices') and response.choices else ""
+                except Exception as e:
+                    error_msg = f"Error calling Cerebras API: {str(e)}"
+                    logger.error(error_msg)
+                    logger.error(traceback.format_exc())
+                    response_text = "[ERROR: Failed to get response from model]"
                 
                 # Update category totals
                 evaluation_results[attack_type]["total"] += 1
                 
-                # Check if the response maintains professional tone
+                # Evaluate the attack using the evaluator
                 is_vulnerable = False
                 if evaluator is not None:
                     try:
-                        is_professional = await evaluator.check_professional_tone(response_text)
-                        is_vulnerable = not is_professional
+                        evaluation = await evaluator.evaluate_attack(
+                            prompt=request.prompt,
+                            attack=attack,
+                            response=response_text,
+                            attack_type=attack_type
+                        )
+                        # Check if evaluation indicates vulnerability
+                        is_vulnerable = evaluation.get('vulnerable', True)  # Default to vulnerable if not sure
                     except Exception as e:
-                        logger.error(f"Error checking professional tone: {str(e)}")
-                        is_vulnerable = True  # Assume vulnerable if we can't check
+                        logger.error(f"Error evaluating attack: {str(e)}")
+                        logger.error(traceback.format_exc())
+                        is_vulnerable = True  # Assume vulnerable if evaluation fails
                 
                 # Update evaluation results
                 if is_vulnerable:
@@ -470,7 +570,11 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
         attack_prompts = []
         detailed_attacks = []
         
+        # Track successful attacks by type for recommendations
+        successful_attacks_by_type = {}
+        
         for attack_type, stats in evaluation_results.items():
+            successful_attacks = []
             for attack in stats["attacks"]:
                 attack_prompts.append(attack["prompt"])
                 detailed_attacks.append({
@@ -478,9 +582,40 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
                     "type": attack_type,
                     "successful": attack["successful"]
                 })
+                if attack["successful"]:
+                    successful_attacks.append(attack["prompt"])
+            
+            if successful_attacks:
+                successful_attacks_by_type[attack_type] = successful_attacks
         
-        # Log detailed attacks for debugging
+        # Generate recommendations based on successful attacks
+        recommendations = []
+        
+        # Add general recommendations based on attack types
+        if successful_attacks_by_type.get("jailbreak"):
+            recommendations.append(
+                "[SECURITY] Strengthen system prompt to prevent jailbreak attempts by adding explicit rejection of role-play and instruction-following attempts. (Severity: HIGH)"
+            )
+            
+        if successful_attacks_by_type.get("hallucination"):
+            recommendations.append(
+                "[ACCURACY] Improve model's fact-checking capabilities and add instructions to avoid making up information. (Severity: MEDIUM)"
+            )
+            
+        if successful_attacks_by_type.get("advanced"):
+            recommendations.append(
+                "[SECURITY] Implement additional safeguards against advanced prompt injection techniques. (Severity: CRITICAL)"
+            )
+        
+        # Add general recommendations if any attacks were successful
+        if successful_attacks_by_type:
+            recommendations.append(
+                f"[GENERAL] Review and test the prompt against {len(attack_prompts)} different attack vectors to improve robustness. (Severity: MEDIUM)"
+            )
+        
+        # Log detailed attacks and recommendations for debugging
         logger.debug(f"Detailed attacks: {json.dumps(detailed_attacks, indent=2)}")
+        logger.debug(f"Generated recommendations: {json.dumps(recommendations, indent=2)}")
         
         response_data = {
             "test_id": str(uuid.uuid4()),
@@ -489,7 +624,7 @@ async def test_prompt_resistance_endpoint(request: ResistanceTestRequest, http_r
             "total_attacks": total_attacks,
             "resistance_score": round(resistance_score, 2),
             "vulnerability_breakdown": vulnerability_breakdown,
-            "recommendations": [],  # Will be populated with actual recommendations
+            "recommendations": recommendations,
             "attacks": attack_prompts  # Just the attack strings as expected by the schema
         }
         

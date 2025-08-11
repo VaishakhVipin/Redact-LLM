@@ -3,13 +3,12 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AttackTimeline } from "../components/AttackTimeline";
+import { AttackTimeline } from "@/components/AttackTimeline";
 import { apiService } from "@/services/api";
 import { Badge } from "@/components/ui/badge";
 import { ResistanceTestResponse } from "@/services/api";
 
 export default function PromptAnalysisPage() {
-  const router = useRouter();
   const [prompt, setPrompt] = useState("");
   const [testId, setTestId] = useState("");
   const [isTesting, setIsTesting] = useState(false);
