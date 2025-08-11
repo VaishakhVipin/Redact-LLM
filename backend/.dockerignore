@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Build and logs
+dist/
+build/
+*.log
+
+# Frontend (just in case)
+../frontend/
+node_modules/
