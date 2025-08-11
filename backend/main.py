@@ -106,8 +106,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://redact-llm.vercel.app",
-        "http://localhost:3000"  # for local development
+        "https://redact-llm.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
