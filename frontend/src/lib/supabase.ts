@@ -25,7 +25,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // Set secure cookies for production in the browser
 if (import.meta.env.PROD && typeof window !== 'undefined') {
   const cookieOptions = {
-    domain: 'redact-llm.vercel.app',
+    domain: 'https://redact-llm.vercel.app',
     path: '/',
     secure: true,
     sameSite: 'lax' as const,
