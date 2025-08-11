@@ -1,0 +1,8 @@
+modules = ["python-3.12", "nodejs-20", "web"]
+run = "cd backend"
+
+[nix]
+channel = "stable-25_05"
+
+[deployment]
+run = ["sh", "-c", "cd backend"]
