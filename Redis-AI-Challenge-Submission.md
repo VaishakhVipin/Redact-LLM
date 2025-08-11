@@ -59,7 +59,7 @@ Redis 8 is at the core of Redact's architecture, providing several critical func
 - **Backend**: FastAPI, Python
 - **AI/ML**: Sentence Transformers (all-MiniLM-L6-v2)
 - **Caching & Messaging**: Redis 8 (Streams, Pub/Sub, Hashes, Sorted Sets)
-- **Deployment**: Docker, Kubernetes
+- **Deployment**: Vercel, Railway
 - **Monitoring**: Built-in rate limit tracking and metrics
 
 ## Future Enhancements
@@ -71,8 +71,5 @@ Redis 8 is at the core of Redact's architecture, providing several critical func
 5. Add Redis Streams-based event sourcing for audit trails
 
 ---
-*Team: [Your Name] (DEV: @yourusername)*
-
-![Redact Logo](https://via.placeholder.com/200x50.png?text=Redact+Logo)
 
 *By submitting this entry, I agree to receive communications from Redis regarding products, services, events, and special offers. I can unsubscribe at any time. My information will be handled in accordance with [Redis's Privacy Policy](https://redis.io/legal/privacy-policy/).*

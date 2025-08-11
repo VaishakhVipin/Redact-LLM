@@ -1,9 +1,9 @@
 // Determine the correct API base URL based on environment
 const getApiBaseUrl = () => {
   // Check if we're in production
-  if (import.meta.env.PROD) {
+  if (import.meta.env.VITE_SITE_URL) {
     // Use your deployed backend URL - you'll need to update this with your actual backend deployment URL
-    return 'https://your-backend-deployment-url.com/api/v1';
+    return `${import.meta.env.VITE_SITE_URL}/api/v1`;
   }
   
   // For development, check if a custom API URL is provided
@@ -12,7 +12,7 @@ const getApiBaseUrl = () => {
     return `${customApiUrl}/api/v1`;
   }
   
-  // Default to localhost for development
+  // Default to localhost for tests
   return 'http://localhost:8000/api/v1';
 };
 
