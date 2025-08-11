@@ -1,74 +1,76 @@
-# Redact: Real-Time AI-Powered Prompt Security Platform
+
 *This is a submission for the [Redis AI Challenge](https://dev.to/challenges/redis-2025-07-23): Real-Time AI Innovators*.
 
 ## What I Built
 
-Redact is a cutting-edge security platform that protects AI systems from prompt injection attacks in real-time. Our solution acts as a secure middleware between users and LLM applications, analyzing and sanitizing prompts before they reach the target model.
+**Redact-LLM** is an AI security testing platform that helps developers identify vulnerabilities in their AI systems. It generates adversarial prompts to test AI models for jailbreaks, hallucinations, and other security issues, then provides detailed analysis of the results.
 
-Key Features:
-- Real-time detection of prompt injection attempts
-- Multi-layered defense against various attack vectors
-- Semantic analysis of suspicious patterns
-- Instant feedback and attack visualization
-- Seamless integration with existing AI workflows
+The application features a React frontend for prompt submission and results visualization, and a FastAPI backend that orchestrates attack generation, execution, and evaluation workflows.
 
 ## Demo
 
-[Insert video demo link here]
+Live demo: [https://redact-llm.vercel.app](https://redact-llm.vercel.app)
 
-### Screenshots
-
-1. **Dashboard Overview**
-   ![Dashboard](https://via.placeholder.com/800x450.png?text=Redact+Dashboard)
-
-2. **Attack Detection**
-   ![Attack Detection](https://via.placeholder.com/800x450.png?text=Attack+Detection+View)
-
-3. **Real-time Analytics**
-   ![Analytics](https://via.placeholder.com/800x450.png?text=Real-time+Analytics)
+The platform allows users to:
+- Submit prompts for security analysis
+- View real-time attack generation and testing
+- Analyze vulnerability breakdowns and security scores
+- Browse historical test results
 
 ## How I Used Redis 8
 
-Redis 8 is at the core of Redact's architecture, providing several critical functions:
+Redis 8 serves as the backbone for several critical components in Redact-LLM:
 
-1. **Semantic Caching**
-   - Implements a semantic cache using sentence-transformers (all-MiniLM-L6-v2 model)
-   - Caches embeddings of processed prompts to avoid redundant computations
-   - Uses cosine similarity with configurable threshold (default: 0.85) for cache lookups
-   - Namespaced storage for different cache types (e.g., embeddings, responses)
+### 1. **Semantic Caching System**
+- Implements intelligent caching using sentence-transformers (all-MiniLM-L6-v2 model)
+- Stores embeddings of prompts and responses to avoid redundant AI model calls
+- Uses cosine similarity matching with configurable thresholds (default: 0.85)
+- Organized with namespaced storage for different cache types
 
-2. **Rate Limiting & Throttling**
-   - Implements multi-dimensional rate limiting (per-user, per-IP, global)
-   - Configurable rate limits for different services (e.g., attack generation, API calls)
-   - Sliding window algorithm for accurate request counting
-   - Automatic cleanup of expired rate limit windows
+**Implementation:** `backend/app/services/semantic_cache.py`
+```python
+class SemanticCache:
+    def __init__(self, redis_client, model_name='all-MiniLM-L6-v2', 
+                 similarity_threshold=0.85, namespace="semantic_cache"):
+        self.redis = redis_client
+        self.model = SentenceTransformer(model_name)
+        self.similarity_threshold = similarity_threshold
+```
 
-3. **Stream Processing**
-   - Processes prompt queue through Redis Streams
-   - Enables asynchronous processing of security checks
-   - Supports horizontal scaling of worker processes
+### 2. **Redis Streams for Job Processing**
+- Uses Redis Streams to queue attack generation and execution jobs
+- Enables asynchronous processing with consumer groups for scalability
+- Processes prompts through multiple worker instances
 
-4. **Connection Management**
-   - Implements connection pooling with configurable limits
-   - Automatic reconnection and health checks
-   - Thread-safe Redis client management
+**Key Components:**
+- `backend/app/services/job_queue.py` - Job submission and status tracking
+- `backend/app/workers/redteam_worker.py` - Stream consumer for processing
+- `backend/app/services/executor_worker.py` - Attack execution worker
 
-## Technical Stack
+### 3. **Rate Limiting & Throttling**
+- Multi-dimensional rate limiting (per-user, per-IP, global limits)
+- Sliding window algorithm for accurate request counting
+- Prevents abuse of expensive AI model calls
 
-- **Frontend**: React, TypeScript, Tailwind CSS
-- **Backend**: FastAPI, Python
-- **AI/ML**: Sentence Transformers (all-MiniLM-L6-v2)
-- **Caching & Messaging**: Redis 8 (Streams, Pub/Sub, Hashes, Sorted Sets)
-- **Deployment**: Vercel, Railway
-- **Monitoring**: Built-in rate limit tracking and metrics
+**Implementation:** `backend/app/services/rate_limiter.py`
 
-## Future Enhancements
+### 4. **Response Caching**
+- Caches attack execution results to avoid redundant model calls
+- TTL-based expiration with stale cache fallback
+- Significantly reduces response times for similar prompts
 
-1. Implement Redis Search for more sophisticated querying of attack patterns
-2. Add RedisTimeSeries for detailed metrics and analytics
-3. Enhance semantic caching with adaptive similarity thresholds
-4. Implement RedisAI for on-the-fly model inference
-5. Add Redis Streams-based event sourcing for audit trails
+### 5. **Connection Management**
+- Robust Redis connection handling with automatic reconnection
+- Connection pooling for optimal performance
+- Health checks and graceful degradation
+
+**Key Features:**
+- Intelligent cache invalidation
+- Horizontal scaling support through Redis Streams
+- Cost optimization through semantic deduplication
+- Real-time job status tracking
+
+The Redis integration enables Redact-LLM to handle high-throughput security testing while minimizing costs and latency through intelligent caching and efficient job processing.
 
 ---
 
