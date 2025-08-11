@@ -126,9 +126,9 @@ export default function LoginPage() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
             <Mail className="h-8 w-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
+          <CardTitle className="text-2xl font-bold">Welcome back to Redact</CardTitle>
           <CardDescription>
-            Enter your email to sign in or create an account
+            Enter your email to sign in
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
@@ -175,19 +175,15 @@ export default function LoginPage() {
               )}
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              Don't have an account?{' '}
-              <Link 
-                to="/signup" 
+              Made with ❤️ by{' '}
+              <a 
+                href="https://github.com/VaishakhVipin" 
+                target="_blank" 
+                rel="noopener noreferrer"
                 className="text-primary hover:underline"
-                onClick={(e) => {
-                  e.preventDefault();
-                  // Store the redirect path before navigating to signup
-                  localStorage.setItem('redirectTo', from);
-                  navigate('/signup');
-                }}
               >
-                Sign up
-              </Link>
+                Vaishakh
+              </a>
             </p>
           </CardFooter>
         </form>
