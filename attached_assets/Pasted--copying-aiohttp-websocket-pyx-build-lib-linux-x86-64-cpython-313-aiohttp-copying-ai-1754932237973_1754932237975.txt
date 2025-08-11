@@ -1,0 +1,110 @@
+      copying aiohttp/_websocket.pyx -> build/lib.linux-x86_64-cpython-313/aiohttp
+      copying aiohttp/py.typed -> build/lib.linux-x86_64-cpython-313/aiohttp
+      creating build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_cparser.pxd.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_find_header.pxd.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_helpers.pyi.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_helpers.pyx.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_http_parser.pyx.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_http_writer.pyx.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/_websocket.pyx.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      copying aiohttp/.hash/hdrs.py.hash -> build/lib.linux-x86_64-cpython-313/aiohttp/.hash
+      running build_ext
+      building 'aiohttp._websocket' extension
+      creating build/temp.linux-x86_64-cpython-313/aiohttp
+      gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O3 -Wall -fPIC -I/opt/render/project/src/.venv/include -I/usr/local/include/python3.13 -c aiohttp/_websocket.c -o build/temp.linux-x86_64-cpython-313/aiohttp/_websocket.o
+      aiohttp/_websocket.c:826:1: warning: ‘Py_UNICODE’ is deprecated [-Wdeprecated-declarations]
+        826 | static CYTHON_INLINE size_t __Pyx_Py_UNICODE_strlen(const Py_UNICODE *u) {
+            | ^~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_Py_UNICODE_strlen’:
+      aiohttp/_websocket.c:827:5: warning: ‘Py_UNICODE’ is deprecated [-Wdeprecated-declarations]
+        827 |     const Py_UNICODE *u_end = u;
+            |     ^~~~~
+      aiohttp/_websocket.c: In function ‘__pyx_pf_7aiohttp_10_websocket__websocket_mask_cython’:
+      aiohttp/_websocket.c:1475:3: warning: ‘Py_OptimizeFlag’ is deprecated [-Wdeprecated-declarations]
+       1475 |   if (unlikely(!Py_OptimizeFlag)) {
+            |   ^~
+      In file included from /usr/local/include/python3.13/Python.h:76,
+                       from aiohttp/_websocket.c:6:
+      /usr/local/include/python3.13/cpython/pydebug.h:13:37: note: declared here
+         13 | Py_DEPRECATED(3.12) PyAPI_DATA(int) Py_OptimizeFlag;
+            |                                     ^~~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_get_tp_dict_version’:
+      aiohttp/_websocket.c:2680:5: warning: ‘ma_version_tag’ is deprecated [-Wdeprecated-declarations]
+       2680 |     return likely(dict) ? __PYX_GET_DICT_VERSION(dict) : 0;
+            |     ^~~~~~
+      In file included from /usr/local/include/python3.13/dictobject.h:101,
+                       from /usr/local/include/python3.13/Python.h:90:
+      /usr/local/include/python3.13/cpython/dictobject.h:25:34: note: declared here
+         25 |     Py_DEPRECATED(3.12) uint64_t ma_version_tag;
+            |                                  ^~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_get_object_dict_version’:
+      aiohttp/_websocket.c:2692:5: warning: ‘ma_version_tag’ is deprecated [-Wdeprecated-declarations]
+       2692 |     return (dictptr && *dictptr) ? __PYX_GET_DICT_VERSION(*dictptr) : 0;
+            |     ^~~~~~
+      /usr/local/include/python3.13/cpython/dictobject.h:25:34: note: declared here
+         25 |     Py_DEPRECATED(3.12) uint64_t ma_version_tag;
+            |                                  ^~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_object_dict_version_matches’:
+      aiohttp/_websocket.c:2696:5: warning: ‘ma_version_tag’ is deprecated [-Wdeprecated-declarations]
+       2696 |     if (unlikely(!dict) || unlikely(tp_dict_version != __PYX_GET_DICT_VERSION(dict)))
+            |     ^~
+      /usr/local/include/python3.13/cpython/dictobject.h:25:34: note: declared here
+         25 |     Py_DEPRECATED(3.12) uint64_t ma_version_tag;
+            |                                  ^~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_CLineForTraceback’:
+      aiohttp/_websocket.c:2741:9: warning: ‘ma_version_tag’ is deprecated [-Wdeprecated-declarations]
+       2741 |         __PYX_PY_DICT_LOOKUP_IF_MODIFIED(
+            |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      /usr/local/include/python3.13/cpython/dictobject.h:25:34: note: declared here
+         25 |     Py_DEPRECATED(3.12) uint64_t ma_version_tag;
+            |                                  ^~~~~~~~~~~~~~
+      aiohttp/_websocket.c:2741:9: warning: ‘ma_version_tag’ is deprecated [-Wdeprecated-declarations]
+       2741 |         __PYX_PY_DICT_LOOKUP_IF_MODIFIED(
+            |         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      /usr/local/include/python3.13/cpython/dictobject.h:25:34: note: declared here
+         25 |     Py_DEPRECATED(3.12) uint64_t ma_version_tag;
+            |                                  ^~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_PyInt_As_long’:
+      aiohttp/_websocket.c:3042:53: error: ‘PyLongObject’ {aka ‘struct _longobject’} has no member named ‘ob_digit’
+       3042 |             const digit* digits = ((PyLongObject*)x)->ob_digit;
+            |                                                     ^~
+      aiohttp/_websocket.c:3097:53: error: ‘PyLongObject’ {aka ‘struct _longobject’} has no member named ‘ob_digit’
+       3097 |             const digit* digits = ((PyLongObject*)x)->ob_digit;
+            |                                                     ^~
+      aiohttp/_websocket.c:3183:27: error: too few arguments to function ‘_PyLong_AsByteArray’
+       3183 |                 int ret = _PyLong_AsByteArray((PyLongObject *)v,
+            |                           ^~~~~~~~~~~~~~~~~~~
+      In file included from /usr/local/include/python3.13/longobject.h:107,
+                       from /usr/local/include/python3.13/Python.h:81:
+      /usr/local/include/python3.13/cpython/longobject.h:111:17: note: declared here
+        111 | PyAPI_FUNC(int) _PyLong_AsByteArray(PyLongObject* v,
+            |                 ^~~~~~~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_PyInt_As_int’:
+      aiohttp/_websocket.c:3238:53: error: ‘PyLongObject’ {aka ‘struct _longobject’} has no member named ‘ob_digit’
+       3238 |             const digit* digits = ((PyLongObject*)x)->ob_digit;
+            |                                                     ^~
+      aiohttp/_websocket.c:3293:53: error: ‘PyLongObject’ {aka ‘struct _longobject’} has no member named ‘ob_digit’
+       3293 |             const digit* digits = ((PyLongObject*)x)->ob_digit;
+            |                                                     ^~
+      aiohttp/_websocket.c:3379:27: error: too few arguments to function ‘_PyLong_AsByteArray’
+       3379 |                 int ret = _PyLong_AsByteArray((PyLongObject *)v,
+            |                           ^~~~~~~~~~~~~~~~~~~
+      /usr/local/include/python3.13/cpython/longobject.h:111:17: note: declared here
+        111 | PyAPI_FUNC(int) _PyLong_AsByteArray(PyLongObject* v,
+            |                 ^~~~~~~~~~~~~~~~~~~
+      aiohttp/_websocket.c: In function ‘__Pyx_PyIndex_AsSsize_t’:
+      aiohttp/_websocket.c:3744:45: error: ‘PyLongObject’ {aka ‘struct _longobject’} has no member named ‘ob_digit’
+       3744 |     const digit* digits = ((PyLongObject*)b)->ob_digit;
+            |                                             ^~
+      error: command '/usr/bin/gcc' failed with exit code 1
+      [end of output]
+  
+  note: This error originates from a subprocess, and is likely not a problem with pip.
+  ERROR: Failed building wheel for aiohttp
+Failed to build aiohttp
+[notice] A new release of pip is available: 25.1.1 -> 25.2
+[notice] To update, run: pip install --upgrade pip
+ERROR: Failed to build installable wheels for some pyproject.toml based projects (aiohttp)
+==> Build failed 😞
+==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
