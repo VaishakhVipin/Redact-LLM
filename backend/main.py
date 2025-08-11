@@ -105,7 +105,10 @@ app = FastAPI(
 # add middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # configure this properly for production
+    allow_origins=[
+        "https://redact-llm.vercel.app",
+        "http://localhost:3000"  # for local development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -113,7 +116,7 @@ app.add_middleware(
 
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["*"]  # configure this properly for production
+    allowed_hosts=["redact-llm.vercel.app", "localhost"]
 )
 
 # health check endpoint
