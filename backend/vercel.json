@@ -29,7 +29,7 @@
       "package.json"
     ],
     "functions": {
-      "api/main.py": {
+      "main.py": {
           "memory": 128,
           "maxDuration": 5
       }
