@@ -1,11 +1,3 @@
-// Determine the correct API base URL based on environment
-const getApiBaseUrl = () => {
-  // Check if we're in production
-  if (import.meta.env.VITE_SITE_URL) {
-    // Use your deployed backend URL - you'll need to update this with your actual backend deployment URL
-    return `${import.meta.env.VITE_SITE_URL}/api/v1`;
-  }
-  
   // For development, check if a custom API URL is provided
   const customApiUrl = import.meta.env.VITE_API_URL;
   if (customApiUrl) {

@@ -2,14 +2,30 @@
     "version": 2,
     "builds": [
       {
-        "src": "app/main.py",
+        "src": "main.py",
         "use": "@vercel/python"
       }
     ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "app/main.py"
+        "dest": "main.py"
       }
+    ]
+    "excludeFiles": [
+      "**/*.pyc",
+      "**/__pycache__/**",
+      ".env",
+      ".git/**",
+      ".venv/**",
+      "automations/**",
+      "docs/**",
+      "logdir/**",
+      "tests/**",
+      "prisma/migrations/**",
+      "Dockerfile",
+      "README.md",
+      "pytest.ini",
+      "package.json"
     ]
   }
