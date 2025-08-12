@@ -11,7 +11,7 @@
         "src": "/(.*)",
         "dest": "main.py"
       }
-    ]
+    ],
     "excludeFiles": [
       "**/*.pyc",
       "**/__pycache__/**",
@@ -27,5 +27,11 @@
       "README.md",
       "pytest.ini",
       "package.json"
-    ]
-  }
+    ],
+    "functions": {
+      "api/main.py": {
+          "memory": 128,
+          "maxDuration": 5
+      }
+    }
+}
