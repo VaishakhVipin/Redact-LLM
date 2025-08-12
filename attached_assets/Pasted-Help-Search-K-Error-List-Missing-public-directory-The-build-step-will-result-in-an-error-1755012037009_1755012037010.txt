@@ -1,0 +1,161 @@
+Help
+
+Search...
+⌘ K
+Error List
+Missing public directory
+The build step will result in an error if the output directory is missing, empty, or invalid (for example, it is not a directory). To resolve this error, you can try the following steps:
+
+Make sure the output directory is specified correctly in project settings
+If the output directory is correct, check the build command (documentation) or the root directory)
+Try running the build command locally and make sure that the files are correctly generated in the specified output directory
+Missing build script
+This is only relevant if you’re using Vercel CLI 16.7.3 or older.
+Suppose your project contains a package.json file, no api directory, and no vercel.json configuration. In that case, it is expected to provide a build script that performs a static build of your frontend and outputs it to a public directory at the root of your project.
+
+When properly configured, your package.json file would look similar to this:
+
+package.json
+
+{
+  "scripts": {
+    "build": "[my-framework] build --output public"
+  }
+}
+An example build script in a package.json file that specifies the output directory.
+
+Once you have defined the build script, this error will disappear. Furthermore, it will not be displayed if you are using package.json purely to provide dependencies for your Vercel functions located inside the api directory.
+
+Maximum team member requests
+The maximum amount of open requests to join a team is 10. In order to allow for more requests, the existing requests need to be approved or declined by a Team Owner.
+
+This ensures the list always remains manageable and protected against spam.
+
+Inviting users to team who requested access
+If a user has already requested access to a team, it's impossible to invite them. Instead, their request must be approved by a Team Owner for the user to gain access.
+
+This ensures no team invites are accidentally accepted.
+
+Request access with the required Git account
+When the deployment for a commit fails with the message "Team access required to deploy.", the Git account of the commit author is not connected to a Hobby team that is a member of the team.
+
+The link attached to the error allows someone to connect their Hobby team to the Git account of the commit author. If the Hobby team is connected to a different Git account, it will fail stating that a different Git account must be used to request access to the team.
+
+Once the Git account is connected to the Hobby team on Vercel, it is possible to request access to the team. A Team Owner can then approve or decline this access request. If the request was approved, the failed commit would be retried, and the following commits would not fail due to missing team access.
+
+Blocked scopes
+A Hobby or team on Vercel can be blocked if it violates our fair use guidelines or Terms of Service.
+
+Blocked Hobby teams or teams cannot create new deployments, or be invited to new teams. Please contact Vercel Support if you need help.
+
+Unused build and development settings
+A Project has several settings that can be found in the dashboard. One of those sections, Build & Development Settings, is used to change the way a Project is built.
+
+However, the Build & Development Settings are only applied to zero-configuration deployments.
+
+If a deployment defines the builds configuration property, the Build & Development Settings are ignored.
+
+Unused Vercel Function region setting
+A Project has several settings that can be found in the dashboard. One of those settings, Vercel Function Region, is used to select the region where your Vercel functions execute.
+
+If a deployment defines the regions configuration property in vercel.json, the Vercel Function Region setting is ignored.
+
+If a CLI Deployment defines the --regions option, the Vercel Function Region setting is ignored.
+
+Invalid route source pattern
+The source property follows the syntax from path-to-regexp, not the RegExp syntax.
+
+For example, negative lookaheads must be wrapped in a group.
+
+Before
+
+vercel.json
+
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "source": "/feedback/(?!general)",
+  "destination": "/api/feedback/general"
+}
+After
+
+vercel.json
+
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "source": "/feedback/((?!general).*)",
+  "destination": "/api/feedback/general"
+}
+Invalid route destination segment
+The source property follows the syntax from path-to-regexp.
+
+A colon (:) defines the start of a named segment parameter.
+
+A named segment parameter defined in the destination property must also be defined in the source property.
+
+Before
+
+vercel.json
+
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "source": "/feedback/:type",
+  "destination": "/api/feedback/:id"
+}
+After
+
+vercel.json
+
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "source": "/feedback/:id",
+  "destination": "/api/feedback/:id"
+}
+Failed to install builder dependencies
+When running the vercel build or vercel dev commands, npm install errors can be encountered if npm was invoked to install Builders that are defined in your vercel.json file.
+
+npm install may fail if:
+
+npm is not installed
+Your internet connection is unavailable
+The Builder that is defined in your configuration is not published to the npm registry
+Double-check that the name and version of the Builder you are requesting is correct.
+
+Mixed routing properties
+If you have rewrites, redirects, headers, cleanUrls or trailingSlash defined in your configuration file, then routes cannot be defined.
+
+This is a necessary limitation because routes is a lower-level primitive that contains all of the other types. Therefore, it cannot be merged safely with the new properties.
+
+See the Upgrading Routes section for examples of routes compared to the new properties.
+
+Conflicting configuration files
+For backward compatibility purposes, there are two naming conventions for configuration files used by Vercel CLI (for example vercel.json and now.json). Both naming conventions are supported, however only one may be defined at a time. Vercel CLI will output an error message if both naming conventions are used at the same time.
+
+These conflicting configuration errors occur if:
+
+Both vercel.json and now.json exist in your project.
+Solution: Delete the now.json file
+Both .vercel and .now directories exist in your project.
+Solution: Delete the .now directory
+Both .vercelignore and .nowignore files exist in your project.
+Solution: Delete the .nowignore file
+Environment Variables that begin with VERCEL_ have a conflicting Environment Variable that begins with NOW_.
+Solution: Only define the VERCEL_ prefixed Environment Variable
+Conflicting functions and builds configuration
+There are two ways to configure Vercel functions in your project: functions or builds. However, only one of them may be used at a time - they cannot be used in conjunction.
+
+For most cases, it is recommended to use the functions property because it supports more features, such as:
+
+Allows configuration of the amount of memory that the Vercel Function is provided with
+More reliable because it requires a specific npm package version for the runtime property
+Supports "clean URLs" by default, which means that the Vercel functions are automatically accessible without their file extension in the URL
+However, the builds property will remain supported for backward compatibility purposes.
+
+Unsupported functions configuration with Nextjs
+When using Next.js, only memory and maxDuration can be configured within the functions property. Next.js automatically handles the other configuration values for you.
+
+Deploying Vercel functions to multiple regions
+It's possible to deploy Vercel functions to multiple regions. This functionality is only available to Enterprise teams.
+
+On the Pro plan, the limitation has existed since the launch of the current pricing model but was applied on July 10, 2020. For Projects created on or after the date, it's no longer possible to deploy to multiple regions.
+
+To select the region closest to you, read our guide on choosing deployment regions for Vercel functions.
