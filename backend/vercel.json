@@ -6,19 +6,15 @@
   "buildCommand": "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt",
   "installCommand": "pip install --upgrade pip",
   "functions": {
-    "main.py": {
+    "api/index.py": {
       "memory": 1024,
       "maxDuration": 60
-    },
-    "app/**/*.py": {
-      "memory": 1024,
-      "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/(.*)",
-      "destination": "/main.py"
+      "destination": "/api/index"
     }
   ],
   "headers": [
