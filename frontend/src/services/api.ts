@@ -1,14 +1,12 @@
   // For development, check if a custom API URL is provided
   const customApiUrl = import.meta.env.VITE_API_URL;
+  let API_BASE_URL = 'http://localhost:8000/api/v1'; // Default to localhost for tests
+
   if (customApiUrl) {
-    return `${customApiUrl}/api/v1`;
+    API_BASE_URL = `${customApiUrl}/api/v1`;
   }
   
-  // Default to localhost for tests
-  return 'http://localhost:8000/api/v1';
-};
 
-const API_BASE_URL = getApiBaseUrl();
 
 export interface AttackGenerationRequest {
   prompt: string;
